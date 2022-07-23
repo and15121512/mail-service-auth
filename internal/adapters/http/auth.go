@@ -1,28 +1,51 @@
 package http
 
 import (
+	"context"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/go-chi/chi"
 	"gitlab.com/sukharnikov.aa/mail-service-auth/internal/domain/models"
 	"gitlab.com/sukharnikov.aa/mail-service-auth/internal/utils"
+	"go.uber.org/zap"
+)
+
+const (
+	tokenExtractionFailed = "failed to extract token from request"
+	invalidAuthHeader     = "invalid Authorization header"
 )
 
 func (s *Server) authHandlers() http.Handler {
 	h := chi.NewRouter()
-	h.With(s.ValidateAuth()).Get("/i", s.Info)
-	h.Post("/login", s.Login)
-	h.Post("/logout", s.Logout)
+	h.With(s.AnnotateContext()).With(s.ValidateAuth()).Get("/i", s.Info)
+	h.With(s.AnnotateContext()).Post("/login", s.Login)
+	h.With(s.AnnotateContext()).Post("/logout", s.Logout)
 	return h
 }
 
+func (s *Server) annotatedLogger(ctx context.Context) *zap.SugaredLogger {
+	request_id, _ := ctx.Value(utils.CtxKeyRequestIDGet()).(string)
+	method, _ := ctx.Value(utils.CtxKeyMethodGet()).(string)
+	url, _ := ctx.Value(utils.CtxKeyURLGet()).(string)
+
+	return s.logger.With(
+		"request_id", request_id,
+		"method", method,
+		"url", url,
+	)
+}
+
 func (s *Server) Info(w http.ResponseWriter, r *http.Request) {
+	logger := s.annotatedLogger(r.Context())
+
 	user, ok := r.Context().Value(ctxKeyUser{}).(*models.User)
 	if !ok {
 		utils.ResponseJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "failed to extract token from request",
+			"error": tokenExtractionFailed,
 		})
+		logger.Errorf(tokenExtractionFailed)
 		return
 	}
 	utils.ResponseJSON(w, http.StatusOK, map[string]string{
@@ -31,11 +54,14 @@ func (s *Server) Info(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
+	logger := s.annotatedLogger(r.Context())
+
 	user, password, ok := r.BasicAuth()
 	if !ok {
 		utils.ResponseJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "invalid Authorization header",
+			"error": invalidAuthHeader,
 		})
+		logger.Errorf(invalidAuthHeader)
 		return
 	}
 	tokens, err := s.auth.Login(r.Context(), user, password)
@@ -43,6 +69,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		utils.ResponseJSON(w, http.StatusForbidden, map[string]string{
 			"error": err.Error(),
 		})
+		logger.Errorf(err.Error())
 		return
 	}
 	redirectURI := r.URL.Query().Get("redirect_uri")
@@ -82,4 +109,28 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 		"accessToken":  "",
 		"refreshToken": "",
 	})
+}
+
+func (s *Server) profiler() http.Handler {
+	r := chi.NewRouter()
+
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, r.RequestURI+"/pprof/", http.StatusMovedPermanently)
+	})
+
+	r.HandleFunc("/pprof", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, r.RequestURI+"/", http.StatusMovedPermanently)
+	})
+
+	// Получение списка всех профилей
+	r.HandleFunc("/pprof/*", pprof.Index)
+	// Отображение строки запуска (например: /go-observability-course/examples/caching/redis/__debug_bin)
+	r.HandleFunc("/pprof/cmdline", pprof.Cmdline)
+	// профиль ЦПУ, в query-параметрах можно указать seconds со значением времени в секундах для снимка (по-умолчанию 30с)
+	r.HandleFunc("/pprof/profile", pprof.Profile)
+	r.HandleFunc("/pprof/symbol", pprof.Symbol)
+	// профиль для получения трассировки (последовательности инструкций) выполнения приложения за время seconds из query-параметров ( по-умолчанию 1с)
+	r.HandleFunc("/pprof/trace", pprof.Trace)
+
+	return r
 }

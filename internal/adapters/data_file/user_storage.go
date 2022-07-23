@@ -7,10 +7,12 @@ import (
 	"gitlab.com/sukharnikov.aa/mail-service-auth/internal/domain/models"
 )
 
-func (*DataFile) Get(ctx context.Context, login string) (*models.User, error) {
+func (db *DataFile) Get(ctx context.Context, login string) (*models.User, error) {
+	logger := db.annotatedLogger(ctx)
+
 	user := &models.User{
-		Login:        config.GetConfig().Auth.Login,
-		PasswordHash: config.GetConfig().Auth.PasswordHash,
+		Login:        config.GetConfig(logger).Auth.Login,
+		PasswordHash: config.GetConfig(logger).Auth.PasswordHash,
 	}
 	return user, nil
 }

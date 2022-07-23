@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"time"
@@ -20,6 +19,7 @@ type Server struct {
 	server *http.Server
 	l      net.Listener
 	port   int
+	logger *zap.SugaredLogger
 }
 
 func New(logger *zap.SugaredLogger, auth ports.Auth) (*Server, error) {
@@ -27,17 +27,17 @@ func New(logger *zap.SugaredLogger, auth ports.Auth) (*Server, error) {
 		err error
 		s   Server
 	)
-	s.l, err = net.Listen("tcp", ":"+config.GetConfig().Listen.Port)
+	s.l, err = net.Listen("tcp", ":"+config.GetConfig(logger).Listen.Port)
 	if err != nil {
-		log.Fatal("Failed listen port", err)
+		logger.Fatalf("Failed listen port: %s", err)
 	}
 	s.auth = auth
 	s.port = s.l.Addr().(*net.TCPAddr).Port
-
 	s.server = &http.Server{
 		Handler: s.routes(),
 		// Addr   : ":" + strconv.Itoa(s.port),  # server.Serve(s.l) does this shit!
 	}
+	s.logger = logger
 
 	return &s, nil
 }
@@ -68,6 +68,7 @@ func (s *Server) routes() http.Handler {
 
 	r.Get("/healthz", s.healthzHandler)
 	r.Mount("/", s.authHandlers())
+	r.Mount("/debug", s.profiler())
 
 	return r
 }
