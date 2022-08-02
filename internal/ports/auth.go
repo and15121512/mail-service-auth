@@ -10,4 +10,5 @@ type Auth interface {
 	// Info(ctx context.Context, login string) (*models.User, error)
 	Validate(ctx context.Context, access_token string) (*models.User, error)
 	Login(ctx context.Context, login, password string) (models.TokenPair, error)
+	ValidateAndRefresh(ctx context.Context, tokens *models.TokenPair) (*models.TokenPair, string, error)
 }

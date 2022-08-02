@@ -15,8 +15,14 @@ type Config struct {
 		Salt         string `yaml:"salt"`
 		Secret       string `yaml:"secret"`
 	}
-	Listen struct {
-		Port string `yaml:"port"`
+	Ports struct {
+		HttpPort  string `yaml:"http_port"`
+		GrpcPort  string `yaml:"grpc_port"`
+		MongoPort string `yaml:"mongo_port"`
+	}
+	Hosts struct {
+		AuthHost  string `yaml:"auth_host"`
+		MongoHost string `yaml:"mongo_host"`
 	}
 }
 

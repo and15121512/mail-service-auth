@@ -27,7 +27,7 @@ func New(logger *zap.SugaredLogger, auth ports.Auth) (*Server, error) {
 		err error
 		s   Server
 	)
-	s.l, err = net.Listen("tcp", ":"+config.GetConfig(logger).Listen.Port)
+	s.l, err = net.Listen("tcp", ":"+config.GetConfig(logger).Ports.HttpPort)
 	if err != nil {
 		logger.Fatalf("Failed listen port: %s", err)
 	}
@@ -68,7 +68,7 @@ func (s *Server) routes() http.Handler {
 
 	r.Get("/healthz", s.healthzHandler)
 	r.Mount("/", s.authHandlers())
-	r.Mount("/debug", s.profiler())
+	r.Mount("/debug/", middleware.Profiler())
 
 	return r
 }

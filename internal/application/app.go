@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"gitlab.com/sukharnikov.aa/mail-service-auth/internal/adapters/grpc"
+
 	"github.com/TheZeroSlave/zapsentry"
 	"gitlab.com/sukharnikov.aa/mail-service-auth/internal/adapters/data_file"
 	"gitlab.com/sukharnikov.aa/mail-service-auth/internal/adapters/http"
@@ -15,7 +17,8 @@ import (
 )
 
 var (
-	s      *http.Server
+	hs     *http.Server
+	gs     *grpc.Server
 	logger *zap.Logger
 )
 
@@ -61,24 +64,34 @@ func Start(ctx context.Context) {
 	}
 	authS := auth.New(db, logger.Sugar())
 
-	s, err = http.New(logger.Sugar(), authS)
+	hs, err = http.New(logger.Sugar(), authS)
 	if err != nil {
 		logger.Sugar().Fatalf("http server creating failed: %s", err)
 	}
 
+	gs, err = grpc.New(logger.Sugar(), authS)
+	if err != nil {
+		logger.Sugar().Fatalf("grpc server creating failed: %s", err)
+	}
+
 	var g errgroup.Group
 	g.Go(func() error {
-		return s.Start()
+		return hs.Start()
+	})
+	g.Go(func() error {
+		return gs.Start()
 	})
 
-	logger.Sugar().Info(fmt.Sprintf("app is started on port:%d", s.Port()))
+	logger.Sugar().Info(fmt.Sprintf("app is started on ports: %d (http) and %d (grpc)", hs.Port(), gs.Port()))
+
 	err = g.Wait()
 	if err != nil {
-		logger.Sugar().Fatalw("http server start failed", zap.Error(err))
+		logger.Sugar().Fatalw("server start failed", zap.Error(err))
 	}
 }
 
 func Stop() {
-	_ = s.Stop(context.Background())
+	_ = hs.Stop(context.Background())
+	_ = gs.Stop(context.Background())
 	logger.Sugar().Info("app has stopped")
 }

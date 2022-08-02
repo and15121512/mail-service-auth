@@ -6,5 +6,10 @@ auth:
   password_hash: b1b3773a05c0ed0176787a4f1574ff0075f7521e # Encrypted 'qwerty'
   salt: # h1$2Ej#jd5e23jkl2F
   secret: kdIewjDi#q$L#dF$%wle
-listen:
-  port: 8626 # If 0 then automatic port selection
+ports:
+  http_port: 3000 # If 0 then automatic port selection
+  grpc_port: 4000 # If 0 then automatic port selection
+  mongo_port: 27017
+hosts:
+  auth_host: mail-service-auth
+  mongo_host: mongo-db-auth
